@@ -9,7 +9,7 @@ You only need to do the click-step once in Meta's Graph API Explorer:
 
 Then run:
   python get_token.py --app-id APPID --app-secret APPSECRET --user-token TOKEN
-  # optional: --page thestatepostnews   (filters to one page by name/slug)
+  # optional: --page thecitizenpost   (filters to one page by name/slug)
 
 It prints the FB_PAGE_ID and FB_PAGE_ACCESS_TOKEN lines ready for your .env.
 Page tokens minted from a long-lived user token are effectively non-expiring.

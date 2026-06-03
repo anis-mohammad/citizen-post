@@ -1,6 +1,6 @@
 name: Post News Reel to Facebook
 
-# Each run rotates across all US sources (src/feeds.py): prepare (clean headline,
+# Each run rotates across all Bangladeshi sources (src/feeds.py): prepare (clean headline,
 # build the branded card + 3s video, stage it) then publish (caption + rotating
 # hashtags + auto source comment). Dedup + rotation + hashtag cursors live in
 # state.json and are committed back so they persist between scheduled runs.
@@ -13,7 +13,7 @@ name: Post News Reel to Facebook
 # cron-job.org POSTs to the GitHub API workflow_dispatch endpoint 8x daily at
 # 6/8/10 PM and 12/1/2/3/4 AM Asia/Dhaka. To trigger manually, run via the Actions tab.
 #
-#   URL:      https://api.github.com/repos/anis-mohammad/statepost/actions/workflows/post-reel.yml/dispatches
+#   URL:      https://api.github.com/repos/<OWNER>/<REPO>/actions/workflows/post-reel.yml/dispatches
 #   Method:   POST
 #   Body:     {"ref":"main"}
 #   Schedule: 0 18,20,22,0,1,2,3,4 * * *  (timezone Asia/Dhaka)

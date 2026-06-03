@@ -37,6 +37,9 @@ def _slug(text: str, maxlen: int = 40) -> str:
 def clean_title(title: str) -> str:
     """Strip newsroom prefixes/suffixes like 'WATCH LIVE:' or '– live'."""
     t = title.strip()
+    # Bangla feeds (e.g. প্রথম আলো) sometimes join two headlines with ' | ', and
+    # others append ' | <source>'. Keep only the first segment.
+    t = t.split("|")[0].strip() or t
     # leading markers: WATCH, WATCH LIVE, LIVE, LIVE UPDATES, Live blog, etc.
     t = re.sub(r"^(watch\s*live|watch|live\s*updates?|live\s*blog|live)\s*[:\-–—]\s*",
                "", t, flags=re.IGNORECASE)
@@ -135,14 +138,14 @@ def main(argv: list[str] | None = None) -> int:
     src_grp.add_argument(
         "--rotate",
         action="store_true",
-        help="auto-pick the next unposted story, rotating across all US sources (stages it)",
+        help="auto-pick the next unposted story, rotating across all Bangladeshi sources (stages it)",
     )
     p.add_argument("--publish", action="store_true", help="publish the previously staged Reel")
     p.add_argument("--rss-index", type=int, default=0, help="entry index in feed (0=newest)")
     p.add_argument("--state", default="state.json", help="rotation/dedup state file")
     p.add_argument("--staged", default="staged.json", help="staged-Reel file (prepare→publish)")
     p.add_argument("--title", help="override the scraped headline")
-    p.add_argument("--brand", help="main brand/logo text on the card (default: THE STATE POST)")
+    p.add_argument("--brand", help="main brand/logo text on the card (default: THE CITIZEN POST)")
     p.add_argument("--duration", type=float, default=3.0, help="video length in seconds")
     p.add_argument("--no-post", action="store_true", help="generate + stage but do not publish")
     p.add_argument("--caption", help="extra text appended to the Reel caption")

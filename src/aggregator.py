@@ -1,4 +1,4 @@
-"""Rotate across all US feeds and return the next not-yet-posted article.
+"""Rotate across all Bangladeshi feeds and return the next not-yet-posted article.
 
 State is a small JSON file (default output/state.json):
   { "posted": ["url1", "url2", ...], "cursor": <int> }
@@ -13,7 +13,7 @@ import json
 import os
 
 from . import scraper
-from .feeds import US_FEEDS
+from .feeds import BD_FEEDS
 
 DEFAULT_STATE = "state.json"      # repo root so it can be committed back in CI
 MAX_HISTORY = 1000          # cap the posted-URL list so the file stays small
@@ -46,7 +46,7 @@ def pick_next(state_path: str = DEFAULT_STATE, feeds: dict | None = None):
 
     Raises RuntimeError if every source's recent entries have all been posted.
     """
-    feeds = feeds or US_FEEDS
+    feeds = feeds or BD_FEEDS
     names = list(feeds.keys())
     state = _load(state_path)
     seen = set(state["posted"])
@@ -71,6 +71,12 @@ def pick_next(state_path: str = DEFAULT_STATE, feeds: dict | None = None):
                 continue
             if not art.title:
                 continue
+            # skip share-graphics with the headline burned into the image
+            # (প্রথম আলো audio/video thumbnails) — they'd double up on the card
+            if scraper.is_baked_text_image(art.image_url):
+                continue
+            # use the curated Bangla label (not the messy scraped og:site_name)
+            art.source = name
             # advance cursor past this source so next run uses the following one
             state["cursor"] = (idx + 1) % len(names)
             return art, name, state

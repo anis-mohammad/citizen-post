@@ -7,13 +7,35 @@ Two modes:
 """
 from __future__ import annotations
 
+import calendar
+import html
 import re
 from dataclasses import dataclass
-from urllib.parse import urljoin, urlparse
+from datetime import datetime, timedelta, timezone
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlsplit, urlunsplit
 
 import feedparser
 import requests
 from bs4 import BeautifulSoup
+
+# English URL/section slug -> Bangla section label (for the card kicker).
+SECTION_MAP = {
+    "bangladesh": "বাংলাদেশ", "country": "সারাদেশ", "national": "জাতীয়",
+    "politics": "রাজনীতি", "election": "নির্বাচন",
+    "international": "আন্তর্জাতিক", "foreign": "আন্তর্জাতিক", "world": "আন্তর্জাতিক",
+    "middle-east": "মধ্যপ্রাচ্য", "asia": "এশিয়া",
+    "sports": "খেলা", "sport": "খেলা", "cricket": "ক্রিকেট", "football": "ফুটবল",
+    "economy": "অর্থনীতি", "business": "অর্থনীতি", "economics": "অর্থনীতি", "bank": "অর্থনীতি",
+    "entertainment": "বিনোদন", "lifestyle": "লাইফস্টাইল",
+    "technology": "প্রযুক্তি", "tech": "প্রযুক্তি", "science": "বিজ্ঞান",
+    "education": "শিক্ষা", "health": "স্বাস্থ্য", "opinion": "মতামত", "feature": "ফিচার",
+    "religion": "ধর্ম", "jobs": "চাকরি", "crime": "অপরাধ", "law": "আইন-আদালত",
+    "court": "আইন-আদালত", "agriculture": "কৃষি", "weather": "আবহাওয়া",
+}
+# Bangla section labels we accept straight from an RSS <category> when the URL
+# yields nothing (kept tight so we skip topic-tags like "ইরানে ইসরায়েলের হামলা").
+_KNOWN_BN_SECTIONS = set(SECTION_MAP.values()) | {"বিশ্ব সংবাদ", "খেলাধুলা"}
+_DHAKA_TZ = timezone(timedelta(hours=6))
 
 UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -30,6 +52,8 @@ class Article:
     source: str
     url: str
     description: str = ""
+    category: str = ""                       # Bangla section label for the kicker
+    published: datetime | None = None        # publish time (Asia/Dhaka), if known
 
     def __str__(self) -> str:
         img = (self.image_url[:60] + "...") if self.image_url else "(none)"
@@ -39,7 +63,44 @@ class Article:
 def _clean(text: str | None) -> str:
     if not text:
         return ""
-    return re.sub(r"\s+", " ", text).strip()
+    return re.sub(r"\s+", " ", html.unescape(text)).strip()
+
+
+def _category(url: str, entry=None) -> str:
+    """Best-effort Bangla section label: URL path first, then RSS categories."""
+    for seg in urlparse(url).path.lower().split("/"):
+        if seg in SECTION_MAP:
+            return SECTION_MAP[seg]
+    if entry is not None:
+        terms = [t.get("term", "") for t in entry.get("tags", [])] or [entry.get("category", "")]
+        for term in terms:
+            t = _clean(term)
+            if t in _KNOWN_BN_SECTIONS:
+                return t
+    return ""
+
+
+def _strip_overlay(url: str | None) -> str | None:
+    """Drop প্রথম আলো's bottom logo-banner overlay from its CDN (imgix) image URLs."""
+    if not url or "overlay=" not in url:
+        return url
+    parts = urlsplit(url)
+    q = [(k, v) for k, v in parse_qsl(parts.query) if not k.startswith("overlay")]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path,
+                       urlencode(q, safe=":,/%"), parts.fragment))
+
+
+def is_baked_text_image(url: str | None) -> bool:
+    """প্রথম আলো audio/video share-thumbnails have the headline burned into the image."""
+    return bool(url) and bool(re.search(r"(audio|video)thumbnail", url, re.IGNORECASE))
+
+
+def _published(entry) -> datetime | None:
+    """Parsed publish time as an Asia/Dhaka datetime, or None."""
+    tm = entry.get("published_parsed") or entry.get("updated_parsed")
+    if not tm:
+        return None
+    return datetime.fromtimestamp(calendar.timegm(tm), tz=timezone.utc).astimezone(_DHAKA_TZ)
 
 
 def _meta(soup: BeautifulSoup, *keys: str) -> str | None:
@@ -88,7 +149,7 @@ def article(url: str) -> Article:
         "twitter:image:src",
     )
     if image:
-        image = urljoin(url, image)
+        image = _strip_overlay(urljoin(url, image))
 
     description = _meta(soup, "og:description", "twitter:description", "description")
     source = _source_name(soup, url)
@@ -102,6 +163,7 @@ def article(url: str) -> Article:
         source=source,
         url=url,
         description=description or "",
+        category=_category(url),
     )
 
 
@@ -142,6 +204,8 @@ def from_rss(feed_url: str, index: int = 0) -> Article:
     feed_source = _clean(feed.feed.get("title", "")) or _source_name(
         BeautifulSoup("", "html.parser"), link
     )
+    category = _category(link, entry)
+    published = _published(entry)
 
     # Try to enrich from the page; keep feed values if scraping fails.
     try:
@@ -152,6 +216,8 @@ def from_rss(feed_url: str, index: int = 0) -> Article:
             source=scraped.source or feed_source,
             url=link,
             description=scraped.description,
+            category=category,
+            published=published,
         )
     except Exception:
         return Article(
@@ -160,6 +226,8 @@ def from_rss(feed_url: str, index: int = 0) -> Article:
             source=feed_source,
             url=link,
             description=_clean(entry.get("summary", "")),
+            category=category,
+            published=published,
         )
 
 
