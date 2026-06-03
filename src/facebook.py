@@ -28,6 +28,12 @@ class FacebookError(RuntimeError):
     pass
 
 
+def _env(name: str) -> str | None:
+    """Read an env var, trimming stray whitespace/newlines (common in CI secrets)."""
+    val = os.environ.get(name)
+    return val.strip() if val else val
+
+
 def _check(resp: requests.Response) -> dict:
     try:
         data = resp.json()
@@ -82,7 +88,7 @@ def _finish(page_id: str, token: str, video_id: str, description: str) -> dict:
 
 def comment(object_id: str, message: str, token: str | None = None) -> dict:
     """Post a comment on a published object (post or video). Returns {'id': ...}."""
-    token = token or os.environ.get("FB_PAGE_ACCESS_TOKEN")
+    token = token or _env("FB_PAGE_ACCESS_TOKEN")
     if not token:
         raise FacebookError("Missing FB_PAGE_ACCESS_TOKEN")
     resp = requests.post(
@@ -121,8 +127,8 @@ def post_reel(
     wait: bool = True,
 ) -> dict:
     """Upload and publish `video_path` as a Reel. Returns the finish response."""
-    page_id = page_id or os.environ.get("FB_PAGE_ID")
-    token = token or os.environ.get("FB_PAGE_ACCESS_TOKEN")
+    page_id = page_id or _env("FB_PAGE_ID")
+    token = token or _env("FB_PAGE_ACCESS_TOKEN")
     if not page_id or not token:
         raise FacebookError(
             "Missing FB_PAGE_ID / FB_PAGE_ACCESS_TOKEN (set them in .env or the environment)."
